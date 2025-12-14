@@ -415,7 +415,7 @@ const Experience = ({ sceneState, rotationSpeed }: { sceneState: 'CHAOS' | 'FORM
       </group>
 
       <EffectComposer>
-        <Bloom luminanceThreshold={0.8} luminanceSmoothing={0.1} intensity={1.5} radius={0.5} mipmapBlur />
+        <Bloom luminanceThreshold={0.8} luminanceSmoothing={0.1} intensity={1.0} radius={0.4} mipmapBlur={false} />
         <Vignette eskil={false} offset={0.1} darkness={1.2} />
       </EffectComposer>
     </>
