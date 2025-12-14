@@ -42,10 +42,10 @@ const CONFIG = {
     candyColors: ['#FF0000', '#FFFFFF']
   },
   counts: {
-    foliage: 15000,
-    ornaments: 300,   // 拍立得照片数量
-    elements: 200,    // 圣诞元素数量
-    lights: 400       // 彩灯数量
+    foliage: 6000,
+    ornaments: 150,   // 拍立得照片数量
+    elements: 100,    // 圣诞元素数量
+    lights: 100       // 彩灯数量
   },
   tree: { height: 22, radius: 9 }, // 树体尺寸
   photos: {
@@ -513,7 +513,7 @@ export default function GrandTreeApp() {
   return (
     <div style={{ width: '100vw', height: '100vh', backgroundColor: '#000', position: 'relative', overflow: 'hidden' }}>
       <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, zIndex: 1 }}>
-        <Canvas dpr={[1, 2]} gl={{ toneMapping: THREE.ReinhardToneMapping }} shadows>
+        <Canvas dpr={[1]} gl={{ toneMapping: THREE.ReinhardToneMapping }} shadows>
             <Experience sceneState={sceneState} rotationSpeed={rotationSpeed} />
         </Canvas>
       </div>
