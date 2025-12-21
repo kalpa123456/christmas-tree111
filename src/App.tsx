@@ -43,8 +43,8 @@ const CONFIG = {
   },
   counts: {
     foliage: 6000,
-    ornaments: 150,   // 拍立得照片数量
-    elements: 100,    // 圣诞元素数量
+    ornaments: 80,   // 拍立得照片数量
+    elements: 50,    // 圣诞元素数量
     lights: 100       // 彩灯数量
   },
   tree: { height: 22, radius: 9 }, // 树体尺寸
@@ -414,9 +414,10 @@ const Experience = ({ sceneState, rotationSpeed }: { sceneState: 'CHAOS' | 'FORM
         <Sparkles count={600} scale={50} size={8} speed={0.4} opacity={0.4} color={CONFIG.colors.silver} />
       </group>
 
-      <EffectComposer>
-        <Bloom luminanceThreshold={0.8} luminanceSmoothing={0.1} intensity={1.0} radius={0.4} mipmapBlur={false} />
-        <Vignette eskil={false} offset={0.1} darkness={1.2} />
+      <EffectComposer multisampling={0} disableNormalPass>
+        {/*HW luminanceThreshold 调高一点，让只有很亮的东西才发光，减少计算量 */}
+        <Bloom luminanceThreshold={0.8} luminanceSmoothing={0.8} intensity={1.5} radius={0.4} mipmapBlur={false} />
+        <Vignette eskil={false} offset={0.1} darkness={1.1} />
       </EffectComposer>
     </>
   );
@@ -513,7 +514,7 @@ export default function GrandTreeApp() {
   return (
     <div style={{ width: '100vw', height: '100vh', backgroundColor: '#000', position: 'relative', overflow: 'hidden' }}>
       <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, zIndex: 1 }}>
-        <Canvas dpr={1} gl={{ toneMapping: THREE.ReinhardToneMapping }} shadows>
+        <Canvas dpr={1} gl={{ toneMapping: THREE.ReinhardToneMapping,powerPreference: "high-performance",Ut: false }} shadows>
             <Experience sceneState={sceneState} rotationSpeed={rotationSpeed} />
         </Canvas>
       </div>
