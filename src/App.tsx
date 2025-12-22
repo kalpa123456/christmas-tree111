@@ -203,7 +203,7 @@ function TitleText({ visible }: { visible: boolean }) {
     <group visible={visible}>
       <Float speed={2} rotationIntensity={0.2} floatIntensity={0.5}>
         <Text
-          font="/fonts/Cinzel-Bold.ttf" // 如果没有字体，Vite 会回退到默认，或者你可以删除font属性
+          //font="/fonts/Cinzel-Bold.ttf" // 如果没有字体，Vite 会回退到默认，或者你可以删除font属性
           position={[0, CONFIG.tree.height / 2 + 2, 0]}
           fontSize={CONFIG.text.size}
           color={CONFIG.text.color}
