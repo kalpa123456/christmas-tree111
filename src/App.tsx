@@ -8,9 +8,7 @@ import {
   Float,
   PointMaterial,
   Points,
-  useCursor,
-  Instances,
-  Instance
+  useCursor
 } from '@react-three/drei'
 import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing'
 import { easing } from 'maath'
@@ -56,7 +54,7 @@ const calculateTargetPosition = (i: number, count: number, type: 'tree' | 'dispe
   }
 }
 
-// --- 🌲 核心粒子树 (修复了回归动画) ---
+// --- 🌲 核心粒子树 (已修复构建报错) ---
 function TreeParticles({ isDispersed, onClickTree }: { isDispersed: boolean, onClickTree: () => void }) {
   const ref = useRef<THREE.Points>(null)
   const { setHovered } = useCursorState()
@@ -91,15 +89,19 @@ function TreeParticles({ isDispersed, onClickTree }: { isDispersed: boolean, onC
     return [tree, dispersed, col]
   }, [])
 
-  // 2. 动画循环 (使用 maath damp 修复悬浮问题)
+  // 2. 动画循环
   useFrame((state, delta) => {
     if (!ref.current) return
     const currentPositions = ref.current.geometry.attributes.position.array as Float32Array
     const target = isDispersed ? dispersedPositions : treePositions
 
-    // 🚀 核心修复：使用 maath 的 damp 函数处理整个数组
-    // 0.25 是平滑时间，越小越快。这能确保粒子精准回到目标位置。
-    easing.damp(currentPositions, target, 0.25, delta)
+    // ✅ 修复点：使用内联 Math.lerp 替代 easing.damp 处理数组
+    // 这样既解决了类型报错，性能也比调用 24000 次函数更好
+    // t 是平滑系数，越大越快。4 * delta 大约 0.2-0.3秒回归
+    const t = delta * 4
+    for (let i = 0; i < currentPositions.length; i++) {
+      currentPositions[i] = THREE.MathUtils.lerp(currentPositions[i], target[i], t)
+    }
     
     ref.current.geometry.attributes.position.needsUpdate = true
     
@@ -123,9 +125,9 @@ function TreeParticles({ isDispersed, onClickTree }: { isDispersed: boolean, onC
       onPointerOut={() => setHovered(false)}
     >
       <PointMaterial 
-        vertexColors // 必须开启
+        vertexColors 
         transparent 
-        color="#ffffff" // 💡 改为白色，让顶点颜色(红/金)能原样显示，不会发暗
+        color="#ffffff" 
         size={0.15} 
         sizeAttenuation={true} 
         depthWrite={false} 
@@ -135,8 +137,7 @@ function TreeParticles({ isDispersed, onClickTree }: { isDispersed: boolean, onC
   )
 }
 
-// --- 🧊 3D 几何装饰 (红球/黄方块) ---
-// 为了性能和动画稳定性，拆分为 Mesh 渲染
+// --- 🧊 3D 几何装饰 ---
 function GeometricOrnaments({ isDispersed }: { isDispersed: boolean }) {
   const count = CONFIG.counts.shapes
   const data = useMemo(() => Array.from({ length: count }, (_, i) => ({
@@ -161,9 +162,8 @@ function ShapeMesh({ data, isDispersed }: { data: any, isDispersed: boolean }) {
     useFrame((state, delta) => {
         if (!ref.current) return
         const target = isDispersed ? data.dispersedPos : data.treePos
-        // 平滑移动
+        // 这里可以直接用 damp3，因为 position 是 Vector3
         easing.damp3(ref.current.position, target, 0.4, delta)
-        // 旋转
         ref.current.rotation.x += delta * 0.5
         ref.current.rotation.y += delta * 0.5
     })
@@ -180,7 +180,7 @@ function ShapeMesh({ data, isDispersed }: { data: any, isDispersed: boolean }) {
     )
 }
 
-// --- 🖼️ 照片组件 (支持放大) ---
+// --- 🖼️ 照片组件 ---
 function InteractablePhoto({ 
   url, index, isDispersed, activeId, setActiveId 
 }: { 
@@ -322,10 +322,10 @@ export default function App() {
         <ambientLight intensity={0.4} />
         <pointLight position={[10, 20, 10]} intensity={1.5} color="#ffddaa" />
         
-        {/* 粒子树 (绿叶+彩灯) */}
+        {/* 粒子树 */}
         <TreeParticles isDispersed={isDispersed} onClickTree={() => setIsDispersed(true)} />
         
-        {/* 3D 形状 (红球/黄方块) */}
+        {/* 3D 形状 */}
         <GeometricOrnaments isDispersed={isDispersed} />
 
         {/* 照片墙 */}
