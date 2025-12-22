@@ -304,7 +304,7 @@ function TitleText({ visible }: { visible: boolean }) {
     <group visible={visible}>
       <Float speed={2} rotationIntensity={0.2} floatIntensity={0.5}>
         <Text
-          // font="/fonts/Cinzel-Bold.ttf" // 已移除，避免报错
+          //// font="/fonts/Cinzel-Bold.ttf" // 已移除，避免报错
           position={[0, CONFIG.tree.height / 2 + 3, 0]}
           fontSize={CONFIG.text.size}
           color={CONFIG.text.color}
