@@ -310,7 +310,7 @@ export default function App() {
 
   const photos = useMemo(() => 
     Array.from({ length: CONFIG.counts.ornaments }, (_, i) => {
-      const fileIndex = (i % 31) + 1 
+      const fileIndex = (i % 11) + 1 
       return `/photos/${fileIndex}.jpg`
     }), 
   [])
