@@ -12,7 +12,6 @@ import {
   Html
 } from '@react-three/drei'
 import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing'
-import { easing } from 'maath'
 
 // --- ⚙️ 全局配置 ---
 const CONFIG = {
@@ -53,77 +52,75 @@ const calculateTargetPosition = (i: number, count: number, type: 'tree' | 'dispe
   }
 }
 
-// --- 🌲 核心粒子树 (采用绝对状态插值，修复漂浮问题) ---
+// --- 🌲 核心粒子树 (彻底修复回归问题) ---
 function TreeParticles({ isDispersed, onClickTree }: { isDispersed: boolean, onClickTree: () => void }) {
   const ref = useRef<THREE.Points>(null)
   const { setHovered } = useCursorState()
   const totalCount = CONFIG.counts.foliage + CONFIG.counts.lights
 
-  // 1. 初始化两套完全固定的状态：Start(树) 和 End(散开)
-  const [initialData] = useMemo(() => {
+  // 1. 生成原始数据 (只读数据，绝对不可修改)
+  const sourceData = useMemo(() => {
     const tree = new Float32Array(totalCount * 3)
     const dispersed = new Float32Array(totalCount * 3)
     const col = new Float32Array(totalCount * 3)
     const colorHelper = new THREE.Color()
 
     for (let i = 0; i < totalCount; i++) {
-      // 状态 A: 树
+      // 树形态
       const tPos = calculateTargetPosition(i, totalCount, 'tree')
       tree[i*3] = tPos.x; tree[i*3+1] = tPos.y; tree[i*3+2] = tPos.z
 
-      // 状态 B: 散开
+      // 散开形态
       const dPos = calculateTargetPosition(i, totalCount, 'dispersed')
       dispersed[i*3] = dPos.x; dispersed[i*3+1] = dPos.y; dispersed[i*3+2] = dPos.z
 
       // 颜色
       if (i < CONFIG.counts.foliage) {
-        colorHelper.setHSL(0.3, 0.8, 0.3 + Math.random() * 0.2) // 绿
+        colorHelper.setHSL(0.3, 0.8, 0.3 + Math.random() * 0.2)
       } else {
-        if (Math.random() > 0.5) colorHelper.setHex(0xff2222) // 红
-        else colorHelper.setHex(0xffaa00) // 黄/金
+        if (Math.random() > 0.5) colorHelper.setHex(0xff2222) 
+        else colorHelper.setHex(0xffaa00)
       }
       col[i*3] = colorHelper.r; col[i*3+1] = colorHelper.g; col[i*3+2] = colorHelper.b
     }
-    return [{ tree, dispersed, col }]
+    return { tree, dispersed, col }
   }, [])
 
-  // 2. 动画状态机
-  // mixRef 代表当前形态：0 = 完全是树，1 = 完全散开
-  // 我们只动画这个数值，而不是去物理模拟每个粒子
-  const mixRef = useRef(0) 
+  // 2. 🚀 关键修复：克隆一份数据给渲染器使用
+  // 这样 Three.js 修改 bufferPosition 时，sourceData.tree 保持纯净
+  const bufferPositions = useMemo(() => Float32Array.from(sourceData.tree), [sourceData])
+
+  // 3. 动画混合因子 (0 = 树, 1 = 散开)
+  const mixRef = useRef(0)
 
   useFrame((state, delta) => {
     if (!ref.current) return
     const currentPositions = ref.current.geometry.attributes.position.array as Float32Array
     
-    // 目标状态：如果是散开模式，目标是1，否则是0
+    // 目标混合值
     const targetMix = isDispersed ? 1 : 0
-    
-    // 平滑过渡 mix 数值 (速度 2.5)
-    mixRef.current = THREE.MathUtils.lerp(mixRef.current, targetMix, delta * 2.5)
+    // 平滑插值混合因子
+    mixRef.current = THREE.MathUtils.lerp(mixRef.current, targetMix, delta * 3.0)
 
-    // 每一帧根据 mixRef 重新计算位置
-    // 公式：Pos = TreeStart + (DispersedEnd - TreeStart) * mix
+    // 绝对位置计算：每一帧都基于“原始数据”重新计算
+    // 公式：Pos = 原始树 + (原始散开 - 原始树) * 混合因子
     for (let i = 0; i < totalCount; i++) {
       const ix = i * 3, iy = i * 3 + 1, iz = i * 3 + 2
       
-      currentPositions[ix] = THREE.MathUtils.lerp(initialData.tree[ix], initialData.dispersed[ix], mixRef.current)
-      currentPositions[iy] = THREE.MathUtils.lerp(initialData.tree[iy], initialData.dispersed[iy], mixRef.current)
-      currentPositions[iz] = THREE.MathUtils.lerp(initialData.tree[iz], initialData.dispersed[iz], mixRef.current)
+      currentPositions[ix] = THREE.MathUtils.lerp(sourceData.tree[ix], sourceData.dispersed[ix], mixRef.current)
+      currentPositions[iy] = THREE.MathUtils.lerp(sourceData.tree[iy], sourceData.dispersed[iy], mixRef.current)
+      currentPositions[iz] = THREE.MathUtils.lerp(sourceData.tree[iz], sourceData.dispersed[iz], mixRef.current)
     }
     
     ref.current.geometry.attributes.position.needsUpdate = true
-    
-    // 旋转：根据 mix 状态决定转速
-    ref.current.rotation.y += delta * (0.1 - mixRef.current * 0.08) // 树形态(mix=0)转得快，散开(mix=1)转得慢
+    ref.current.rotation.y += delta * (0.1 - mixRef.current * 0.08)
   })
 
   return (
     <Points 
       ref={ref} 
-      // 初始只给 colors，positions 由 useFrame 每一帧绝对控制
-      positions={initialData.tree} 
-      colors={initialData.col}
+      positions={bufferPositions} // 使用克隆的 buffer
+      colors={sourceData.col}
       stride={3} 
       onClick={(e) => { if (!isDispersed) { e.stopPropagation(); onClickTree() } }}
       onPointerOver={() => !isDispersed && setHovered(true)}
@@ -142,13 +139,13 @@ function TreeParticles({ isDispersed, onClickTree }: { isDispersed: boolean, onC
   )
 }
 
-// --- 🧊 3D 几何装饰 (同样采用绝对插值修复) ---
+// --- 🧊 3D 几何装饰 ---
 function GeometricOrnaments({ isDispersed }: { isDispersed: boolean }) {
   const count = CONFIG.counts.shapes
   const data = useMemo(() => Array.from({ length: count }, (_, i) => ({
     treePos: calculateTargetPosition(i, count, 'tree'),
     dispersedPos: calculateTargetPosition(i, count, 'dispersed'),
-    type: Math.random() > 0.5 ? 0 : 1, 
+    type: Math.random() > 0.5 ? 0 : 1,
     scale: 0.3 + Math.random() * 0.3
   })), [])
 
@@ -165,15 +162,12 @@ function ShapeMesh({ data, isDispersed }: { data: any, isDispersed: boolean }) {
 
     useFrame((state, delta) => {
         if (!ref.current) return
-        
-        // 同样使用 mix 逻辑，保证 100% 回归
         const targetMix = isDispersed ? 1 : 0
-        mixRef.current = THREE.MathUtils.lerp(mixRef.current, targetMix, delta * 2.5)
-
-        // 插值计算位置
+        mixRef.current = THREE.MathUtils.lerp(mixRef.current, targetMix, delta * 3.0)
+        
+        // 几何体位置插值
         ref.current.position.lerpVectors(data.treePos, data.dispersedPos, mixRef.current)
         
-        // 旋转动画
         ref.current.rotation.x += delta * 0.5
         ref.current.rotation.y += delta * 0.5
     })
@@ -185,13 +179,15 @@ function ShapeMesh({ data, isDispersed }: { data: any, isDispersed: boolean }) {
     )
 }
 
-// --- 🖼️ 照片组件 (保持原逻辑，因为需要 Zoom 缩放功能) ---
+// --- 🖼️ 照片组件 ---
 function InteractablePhoto({ url, index, isDispersed, activeId, setActiveId }: any) {
   const ref = useRef<THREE.Group>(null)
   const isActive = activeId === index
   const isOtherActive = activeId !== null && activeId !== index
   const { setHovered } = useCursorState()
-
+  
+  // 用于平滑动画的当前位置/旋转状态
+  // 这里我们不使用绝对 lerp，因为照片还需要处理点击放大的逻辑，使用阻尼(damp)效果更好
   const { treePos, dispersedPos } = useMemo(() => ({
     treePos: calculateTargetPosition(index, CONFIG.counts.ornaments, 'tree'),
     dispersedPos: calculateTargetPosition(index, CONFIG.counts.ornaments, 'dispersed')
@@ -214,13 +210,23 @@ function InteractablePhoto({ url, index, isDispersed, activeId, setActiveId }: a
       destScale = 0
     }
 
-    // 这里继续使用 damp3，因为照片数量少且需要复杂的缩放交互，物理效果更好
-    // 如果照片也回不去，可以改小 damp 的 smoothTime 参数 (0.4 -> 0.25)
-    easing.damp3(ref.current.position, dest, 0.25, delta) 
-    easing.damp3(ref.current.scale, [destScale, destScale, 1], 0.25, delta)
+    // 手动实现简单的阻尼，避免 external library 版本问题
+    // 位置
+    ref.current.position.x += (dest.x - ref.current.position.x) * delta * 4
+    ref.current.position.y += (dest.y - ref.current.position.y) * delta * 4
+    ref.current.position.z += (dest.z - ref.current.position.z) * delta * 4
     
-    if (isActive) easing.dampE(ref.current.rotation, destRot, 0.25, delta)
-    else {
+    // 缩放
+    ref.current.scale.x += (destScale - ref.current.scale.x) * delta * 4
+    ref.current.scale.y += (destScale - ref.current.scale.y) * delta * 4
+    ref.current.scale.z += (1 - ref.current.scale.z) * delta * 4
+
+    // 旋转
+    if (isActive) {
+        ref.current.rotation.x += (destRot.x - ref.current.rotation.x) * delta * 4
+        ref.current.rotation.y += (destRot.y - ref.current.rotation.y) * delta * 4
+        ref.current.rotation.z += (destRot.z - ref.current.rotation.z) * delta * 4
+    } else {
         ref.current.rotation.y += delta * 0.1
         if(isDispersed && !isActive) ref.current.lookAt(state.camera.position)
     }
@@ -238,6 +244,7 @@ function InteractablePhoto({ url, index, isDispersed, activeId, setActiveId }: a
   )
 }
 
+// --- 文字组件 ---
 function TitleText({ visible }: { visible: boolean }) {
   return (
     <group visible={visible}>
@@ -271,6 +278,7 @@ function Overlay({ isDispersed, toggle, hasActivePhoto }: any) {
   )
 }
 
+// --- 主应用 ---
 export default function App() {
   const [isDispersed, setIsDispersed] = useState(false)
   const [activePhotoId, setActivePhotoId] = useState<number | null>(null)
